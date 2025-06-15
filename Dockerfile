@@ -4,6 +4,7 @@
 FROM alpine/git:2.43.0 as download
 
 RUN apk add --no-cache wget && \
+    mkdir -p /stable-diffusion-webui/models/Lora && \
     wget -q -O /model.safetensors \
         "https://civitai.com/api/download/models/1854228?type=Model&format=SafeTensor&size=pruned&fp=fp16" && \
     wget -q -O /stable-diffusion-webui/models/Lora/naicv_anime.safetensors \
@@ -37,6 +38,8 @@ RUN --mount=type=cache,target=/root/.cache/pip \
     pip install xformers && \
     pip install -r requirements_versions.txt && \
     python -c "from launch import prepare_environment; prepare_environment()" --skip-torch-cuda-test
+
+COPY --from=download /stable-diffusion-webui/models/Lora /stable-diffusion-webui/models/Lora
 
 COPY --from=download /model.safetensors /model.safetensors
 
