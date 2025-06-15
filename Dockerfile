@@ -4,7 +4,12 @@
 FROM alpine/git:2.43.0 as download
 
 RUN apk add --no-cache wget && \
-    wget -q -O /model.safetensors "https://civitai.com/api/download/models/1854228?type=Model&format=SafeTensor&size=pruned&fp=fp16"
+    wget -q -O /model.safetensors \
+        "https://civitai.com/api/download/models/1854228?type=Model&format=SafeTensor&size=pruned&fp=fp16" && \
+    wget -q -O /stable-diffusion-webui/models/Lora/naicv_anime.safetensors \
+        "https://civitai.green/api/download/models/244808?type=Model&format=SafeTensor" && \
+    wget -q -O /stable-diffusion-webui/models/Lora/epicrealism.safetensors \
+        "https://civitai.green/api/download/models/62833?type=Model&format=SafeTensor"
 
 # ---------------------------------------------------------------------------- #
 #                        Stage 2: Build the final image                        #
