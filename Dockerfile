@@ -3,50 +3,57 @@
 # ---------------------------------------------------------------------------- #
 FROM alpine/git:2.43.0 AS download
 
-# Install dependencies and set up error handling
+# Install dependencies
 RUN apk add --no-cache wget curl bash
 
 # Create directories
 RUN mkdir -p /stable-diffusion-webui/models/Lora
 
-# Download main model with proper error handling
-RUN echo "Downloading main model..." && \
+# Download main model - MUST succeed for build to continue
+RUN echo "Downloading main model (REQUIRED)..." && \
     curl -L -H "Authorization: Bearer 31daa44aec2ea7c87e3bf582fd4640a9" \
         -o /model.safetensors \
         -f --retry 3 --retry-delay 5 \
         "https://civitai.com/api/download/models/1920896?type=Model&format=SafeTensor&size=full&fp=fp16" || \
-    (echo "Failed to download main model" && exit 1)
+    (echo "ERROR: Failed to download main model - this is required!" && exit 1)
 
-# Download LoRA models one by one with error handling
-RUN echo "Downloading feet_pose_realistic..." && \
-    wget --tries=3 --timeout=300 \
-        -O /stable-diffusion-webui/models/Lora/feet_pose_realistic.safetensors \
-        "https://civitai.green/api/download/models/19130?type=Model&format=SafeTensor&size=full&fp=fp16" || \
-    (echo "Failed to download feet_pose_realistic" && exit 1)
+# Download LoRA models - failures are non-critical
+# Using curl with auth for all models since civitai.green redirects require authentication
 
-RUN echo "Downloading feet_fetish_pony..." && \
-    wget --tries=3 --timeout=300 \
-        -O /stable-diffusion-webui/models/Lora/feet_fetish_pony.safetensors \
-        "https://civitai.green/api/download/models/1442192?type=Model&format=SafeTensor" || \
-    (echo "Failed to download feet_fetish_pony" && exit 1)
+RUN echo "Downloading feet_pose_realistic (optional)..." && \
+    curl -L -H "Authorization: Bearer 31daa44aec2ea7c87e3bf582fd4640a9" \
+        -o /stable-diffusion-webui/models/Lora/feet_pose_realistic.safetensors \
+        -f --retry 3 --retry-delay 5 \
+        "https://civitai.com/api/download/models/19130?type=Model&format=SafeTensor&size=full&fp=fp16" || \
+    echo "Warning: Failed to download feet_pose_realistic, continuing without it..."
 
-RUN echo "Downloading innies_better_vulva..." && \
-    wget --tries=3 --timeout=300 \
-        -O /stable-diffusion-webui/models/Lora/innies_better_vulva.safetensors \
-        "https://civitai.green/api/download/models/12873?type=Model&format=SafeTensor&size=full&fp=fp16" || \
-    (echo "Failed to download innies_better_vulva" && exit 1)
+RUN echo "Downloading feet_fetish_pony (optional)..." && \
+    curl -L -H "Authorization: Bearer 31daa44aec2ea7c87e3bf582fd4640a9" \
+        -o /stable-diffusion-webui/models/Lora/feet_fetish_pony.safetensors \
+        -f --retry 3 --retry-delay 5 \
+        "https://civitai.com/api/download/models/1442192?type=Model&format=SafeTensor" || \
+    echo "Warning: Failed to download feet_fetish_pony, continuing without it..."
 
-RUN echo "Downloading pony_amateur..." && \
+RUN echo "Downloading innies_better_vulva (optional)..." && \
+    curl -L -H "Authorization: Bearer 31daa44aec2ea7c87e3bf582fd4640a9" \
+        -o /stable-diffusion-webui/models/Lora/innies_better_vulva.safetensors \
+        -f --retry 3 --retry-delay 5 \
+        "https://civitai.com/api/download/models/12873?type=Model&format=SafeTensor&size=full&fp=fp16" || \
+    echo "Warning: Failed to download innies_better_vulva, continuing without it..."
+
+RUN echo "Downloading pony_amateur (optional)..." && \
     curl -L -H "Authorization: Bearer 31daa44aec2ea7c87e3bf582fd4640a9" \
         -o /stable-diffusion-webui/models/Lora/pony_amateur.safetensors \
         -f --retry 3 --retry-delay 5 \
         "https://civitai.com/api/download/models/717403?type=Model&format=SafeTensor" || \
-    (echo "Failed to download pony_amateur" && exit 1)
+    echo "Warning: Failed to download pony_amateur, continuing without it..."
 
-# Verify all files were downloaded
+# Verify downloads and clean up any empty files
 RUN echo "Verifying downloads..." && \
-    ls -la /model.safetensors && \
-    ls -la /stable-diffusion-webui/models/Lora/
+    echo "Main model:" && ls -la /model.safetensors && \
+    echo "LoRA models:" && ls -la /stable-diffusion-webui/models/Lora/ && \
+    find /stable-diffusion-webui/models/Lora/ -type f -size 0 -delete && \
+    echo "Cleaned up any empty files"
 
 # ---------------------------------------------------------------------------- #
 #                        Stage 2: Build the final image                        #
