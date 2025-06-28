@@ -3,18 +3,47 @@
 # ---------------------------------------------------------------------------- #
 FROM alpine/git:2.43.0 AS download
 
-RUN apk add --no-cache wget && \
-    mkdir -p /stable-diffusion-webui/models/Lora && \
-    wget -q -O /model.safetensors \
-        "https://civitai.green/api/download/models/1920896?type=Model&format=SafeTensor&size=full&fp=fp16" && \
-    wget -q -O /stable-diffusion-webui/models/Lora/feet_pose_realistic.safetensors \
-        "https://civitai.green/api/download/models/19130?type=Model&format=SafeTensor&size=full&fp=fp16" && \
-    wget -q -O /stable-diffusion-webui/models/Lora/feet_fetish_pony.safetensors \
-        "https://civitai.green/api/download/models/1442192?type=Model&format=SafeTensor" && \
-    wget -q -O /stable-diffusion-webui/models/Lora/innies_better_vulva.safetensors \
-        "https://civitai.green/api/download/models/12873?type=Model&format=SafeTensor&size=full&fp=fp16" && \
-    wget -q -O /stable-diffusion-webui/models/Lora/pony_amateur.safetensors \
-        "https://civitai.green/api/download/models/717403?type=Model&format=SafeTensor"
+RUN apk add --no-cache wget curl && \
+    mkdir -p /stable-diffusion-webui/models/Lora
+
+# Try downloading each file separately to see which one fails
+# Main model
+RUN echo "Downloading main model..." && \
+    wget --no-check-certificate --content-disposition \
+        -O /model.safetensors \
+        "https://civitai.green/api/download/models/1920896?type=Model&format=SafeTensor&size=full&fp=fp16" || \
+    wget --no-check-certificate --content-disposition \
+        -O /model.safetensors \
+        "https://civitai.com/api/download/models/1920896?type=Model&format=SafeTensor&size=full&fp=fp16" || \
+    echo "Failed to download main model"
+
+# LoRA 1
+RUN echo "Downloading LoRA 1..." && \
+    wget --no-check-certificate --content-disposition \
+        -O /stable-diffusion-webui/models/Lora/feet_pose_realistic.safetensors \
+        "https://civitai.green/api/download/models/19130?type=Model&format=SafeTensor&size=full&fp=fp16" || \
+    echo "Failed to download LoRA 1"
+
+# LoRA 2
+RUN echo "Downloading LoRA 2..." && \
+    wget --no-check-certificate --content-disposition \
+        -O /stable-diffusion-webui/models/Lora/feet_fetish_pony.safetensors \
+        "https://civitai.green/api/download/models/1442192?type=Model&format=SafeTensor" || \
+    echo "Failed to download LoRA 2"
+
+# LoRA 3
+RUN echo "Downloading LoRA 3..." && \
+    wget --no-check-certificate --content-disposition \
+        -O /stable-diffusion-webui/models/Lora/innies_better_vulva.safetensors \
+        "https://civitai.green/api/download/models/12873?type=Model&format=SafeTensor&size=full&fp=fp16" || \
+    echo "Failed to download LoRA 3"
+
+# LoRA 4
+RUN echo "Downloading LoRA 4..." && \
+    wget --no-check-certificate --content-disposition \
+        -O /stable-diffusion-webui/models/Lora/pony_amateur.safetensors \
+        "https://civitai.green/api/download/models/717403?type=Model&format=SafeTensor" || \
+    echo "Failed to download LoRA 4"
 
 # ---------------------------------------------------------------------------- #
 #                        Stage 2: Build the final image                        #
