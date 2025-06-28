@@ -6,11 +6,15 @@ FROM alpine/git:2.43.0 as download
 RUN apk add --no-cache wget && \
     mkdir -p /stable-diffusion-webui/models/Lora && \
     wget -q -O /model.safetensors \
-        "https://civitai.com/api/download/models/1854228?type=Model&format=SafeTensor&size=pruned&fp=fp16" && \
-    wget -q -O /stable-diffusion-webui/models/Lora/naicv_anime.safetensors \
-        "https://civitai.green/api/download/models/244808?type=Model&format=SafeTensor" && \
-    wget -q -O /stable-diffusion-webui/models/Lora/epicrealism.safetensors \
-        "https://civitai.green/api/download/models/62833?type=Model&format=SafeTensor"
+        "https://civitai.com/api/download/models/1920896?type=Model&format=SafeTensor&size=full&fp=fp16" && \
+    wget -q -O /stable-diffusion-webui/models/Lora/feet_pose_realistic.safetensors \
+        "https://civitai.com/api/download/models/19130?type=Model&format=SafeTensor&size=full&fp=fp16" && \
+    wget -q -O /stable-diffusion-webui/models/Lora/feet_fetish_pony.safetensors \
+        "https://civitai.com/api/download/models/1442192?type=Model&format=SafeTensor" && \
+    wget -q -O /stable-diffusion-webui/models/Lora/innies_better_vulva.safetensors \
+        "https://civitai.com/api/download/models/12873?type=Model&format=SafeTensor&size=full&fp=fp16" && \
+    wget -q -O /stable-diffusion-webui/models/Lora/pony_amateur.safetensors \
+        "https://civitai.com/api/download/models/717403?type=Model&format=SafeTensor"
 
 # ---------------------------------------------------------------------------- #
 #                        Stage 2: Build the final image                        #
