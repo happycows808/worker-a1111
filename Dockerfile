@@ -1,25 +1,25 @@
 # ---------------------------------------------------------------------------- #
 #                         Stage 1: Download the models                         #
 # ---------------------------------------------------------------------------- #
-FROM alpine/git:2.43.0 as download
+FROM alpine/git:2.43.0 AS download
 
 RUN apk add --no-cache wget && \
     mkdir -p /stable-diffusion-webui/models/Lora && \
     wget -q -O /model.safetensors \
-        "https://civitai.com/api/download/models/1920896?type=Model&format=SafeTensor&size=full&fp=fp16" && \
+        "https://civitai.green/api/download/models/1920896?type=Model&format=SafeTensor&size=full&fp=fp16" && \
     wget -q -O /stable-diffusion-webui/models/Lora/feet_pose_realistic.safetensors \
-        "https://civitai.com/api/download/models/19130?type=Model&format=SafeTensor&size=full&fp=fp16" && \
+        "https://civitai.green/api/download/models/19130?type=Model&format=SafeTensor&size=full&fp=fp16" && \
     wget -q -O /stable-diffusion-webui/models/Lora/feet_fetish_pony.safetensors \
-        "https://civitai.com/api/download/models/1442192?type=Model&format=SafeTensor" && \
+        "https://civitai.green/api/download/models/1442192?type=Model&format=SafeTensor" && \
     wget -q -O /stable-diffusion-webui/models/Lora/innies_better_vulva.safetensors \
-        "https://civitai.com/api/download/models/12873?type=Model&format=SafeTensor&size=full&fp=fp16" && \
+        "https://civitai.green/api/download/models/12873?type=Model&format=SafeTensor&size=full&fp=fp16" && \
     wget -q -O /stable-diffusion-webui/models/Lora/pony_amateur.safetensors \
-        "https://civitai.com/api/download/models/717403?type=Model&format=SafeTensor"
+        "https://civitai.green/api/download/models/717403?type=Model&format=SafeTensor"
 
 # ---------------------------------------------------------------------------- #
 #                        Stage 2: Build the final image                        #
 # ---------------------------------------------------------------------------- #
-FROM python:3.10.14-slim as build_final_image
+FROM python:3.10.14-slim AS build_final_image
 
 ARG A1111_RELEASE=v1.9.3
 
