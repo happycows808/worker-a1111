@@ -3,24 +3,24 @@
 # ---------------------------------------------------------------------------- #
 FROM alpine/git:2.43.0 AS download
 
-RUN apk add --no-cache wget && \
+RUN apk add --no-cache wget curl && \
     mkdir -p /stable-diffusion-webui/models/Lora && \
-    # Main model - Pony Realism
-    wget --header="Authorization: Bearer 31daa44aec2ea7c87e3bf582fd4640a9" \
-        -O /model.safetensors \
+    # Main model - Pony Realism (using curl for auth)
+    curl -L -H "Authorization: Bearer 31daa44aec2ea7c87e3bf582fd4640a9" \
+        -o /model.safetensors \
         "https://civitai.com/api/download/models/1920896?type=Model&format=SafeTensor&size=full&fp=fp16" && \
-    # LoRA 1 - Feet Pose
+    # LoRA 1 - Feet Pose (public, using wget)
     wget -q -O /stable-diffusion-webui/models/Lora/feet_pose_realistic.safetensors \
         "https://civitai.green/api/download/models/19130?type=Model&format=SafeTensor&size=full&fp=fp16" && \
-    # LoRA 2 - Feet Fetish Pony
+    # LoRA 2 - Feet Fetish Pony (public, using wget)
     wget -q -O /stable-diffusion-webui/models/Lora/feet_fetish_pony.safetensors \
         "https://civitai.green/api/download/models/1442192?type=Model&format=SafeTensor" && \
-    # LoRA 3 - Innies
+    # LoRA 3 - Innies (public, using wget)
     wget -q -O /stable-diffusion-webui/models/Lora/innies_better_vulva.safetensors \
         "https://civitai.green/api/download/models/12873?type=Model&format=SafeTensor&size=full&fp=fp16" && \
-    # LoRA 4 - Pony Amateur
-    wget --header="Authorization: Bearer 31daa44aec2ea7c87e3bf582fd4640a9" \
-        -O /stable-diffusion-webui/models/Lora/pony_amateur.safetensors \
+    # LoRA 4 - Pony Amateur (using curl for auth)
+    curl -L -H "Authorization: Bearer 31daa44aec2ea7c87e3bf582fd4640a9" \
+        -o /stable-diffusion-webui/models/Lora/pony_amateur.safetensors \
         "https://civitai.com/api/download/models/717403?type=Model&format=SafeTensor"
 
 # ---------------------------------------------------------------------------- #
