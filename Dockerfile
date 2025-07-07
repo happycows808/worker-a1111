@@ -14,7 +14,7 @@ RUN echo "Downloading main model (REQUIRED)..." && \
     curl -L -H "Authorization: Bearer 31daa44aec2ea7c87e3bf582fd4640a9" \
         -o /model.safetensors \
         -f --retry 3 --retry-delay 5 \
-        "https://civitai.com/api/download/models/1920896?type=Model&format=SafeTensor&size=full&fp=fp16" || \
+        "https://civitai.com/api/download/models/915814?type=Model&format=SafeTensor&size=pruned&fp=fp16" || \
     (echo "ERROR: Failed to download main model - this is required!" && exit 1)
 
 # Download LoRA models - failures are non-critical
