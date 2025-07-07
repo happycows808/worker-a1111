@@ -14,39 +14,80 @@ RUN echo "Downloading main model (REQUIRED)..." && \
     curl -L -H "Authorization: Bearer 31daa44aec2ea7c87e3bf582fd4640a9" \
         -o /model.safetensors \
         -f --retry 3 --retry-delay 5 \
-        "https://civitai.com/api/download/models/915814?type=Model&format=SafeTensor&size=pruned&fp=fp16" || \
+        "https://civitai.com/api/download/models/1697082?type=Model&format=SafeTensor&size=pruned&fp=fp16" || \
     (echo "ERROR: Failed to download main model - this is required!" && exit 1)
 
 # Download LoRA models - failures are non-critical
-# Using curl with auth for all models since civitai.green redirects require authentication
 
-RUN echo "Downloading feet_pose_realistic (optional)..." && \
+RUN echo "Downloading ExpressiveH (optional)..." && \
     curl -L -H "Authorization: Bearer 31daa44aec2ea7c87e3bf582fd4640a9" \
-        -o /stable-diffusion-webui/models/Lora/feet_pose_realistic.safetensors \
+        -o /stable-diffusion-webui/models/Lora/expressiveh.safetensors \
         -f --retry 3 --retry-delay 5 \
-        "https://civitai.com/api/download/models/19130?type=Model&format=SafeTensor&size=full&fp=fp16" || \
-    echo "Warning: Failed to download feet_pose_realistic, continuing without it..."
+        "https://civitai.com/api/download/models/382152?type=Model&format=SafeTensor" || \
+    echo "Warning: Failed to download ExpressiveH, continuing without it..."
 
-RUN echo "Downloading feet_fetish_pony (optional)..." && \
+RUN echo "Downloading After Sex Lying (optional)..." && \
     curl -L -H "Authorization: Bearer 31daa44aec2ea7c87e3bf582fd4640a9" \
-        -o /stable-diffusion-webui/models/Lora/feet_fetish_pony.safetensors \
+        -o /stable-diffusion-webui/models/Lora/after_sex_lying.safetensors \
         -f --retry 3 --retry-delay 5 \
-        "https://civitai.com/api/download/models/1442192?type=Model&format=SafeTensor" || \
-    echo "Warning: Failed to download feet_fetish_pony, continuing without it..."
+        "https://civitai.com/api/download/models/21538?type=Model&format=SafeTensor&size=full&fp=fp16" || \
+    echo "Warning: Failed to download After Sex Lying, continuing without it..."
 
-RUN echo "Downloading innies_better_vulva (optional)..." && \
+RUN echo "Downloading POV Doggy (optional)..." && \
     curl -L -H "Authorization: Bearer 31daa44aec2ea7c87e3bf582fd4640a9" \
-        -o /stable-diffusion-webui/models/Lora/innies_better_vulva.safetensors \
+        -o /stable-diffusion-webui/models/Lora/pov_doggy.safetensors \
         -f --retry 3 --retry-delay 5 \
-        "https://civitai.com/api/download/models/12873?type=Model&format=SafeTensor&size=full&fp=fp16" || \
-    echo "Warning: Failed to download innies_better_vulva, continuing without it..."
+        "https://civitai.com/api/download/models/10290?type=Model&format=SafeTensor&size=full&fp=fp16" || \
+    echo "Warning: Failed to download POV Doggy, continuing without it..."
 
-RUN echo "Downloading pony_amateur (optional)..." && \
+RUN echo "Downloading Riding Dildo (optional)..." && \
     curl -L -H "Authorization: Bearer 31daa44aec2ea7c87e3bf582fd4640a9" \
-        -o /stable-diffusion-webui/models/Lora/pony_amateur.safetensors \
+        -o /stable-diffusion-webui/models/Lora/riding_dildo.safetensors \
         -f --retry 3 --retry-delay 5 \
-        "https://civitai.com/api/download/models/717403?type=Model&format=SafeTensor" || \
-    echo "Warning: Failed to download pony_amateur, continuing without it..."
+        "https://civitai.com/api/download/models/27100?type=Model&format=SafeTensor&size=full&fp=fp16" || \
+    echo "Warning: Failed to download Riding Dildo, continuing without it..."
+
+RUN echo "Downloading Legs Up Presenting (optional)..." && \
+    curl -L -H "Authorization: Bearer 31daa44aec2ea7c87e3bf582fd4640a9" \
+        -o /stable-diffusion-webui/models/Lora/legs_up_presenting.safetensors \
+        -f --retry 3 --retry-delay 5 \
+        "https://civitai.com/api/download/models/23784?type=Model&format=SafeTensor&size=full&fp=fp16" || \
+    echo "Warning: Failed to download Legs Up Presenting, continuing without it..."
+
+RUN echo "Downloading Feet Pose Anime (optional)..." && \
+    curl -L -H "Authorization: Bearer 31daa44aec2ea7c87e3bf582fd4640a9" \
+        -o /stable-diffusion-webui/models/Lora/feet_pose_anime.safetensors \
+        -f --retry 3 --retry-delay 5 \
+        "https://civitai.com/api/download/models/25848?type=Model&format=SafeTensor&size=full&fp=fp16" || \
+    echo "Warning: Failed to download Feet Pose Anime, continuing without it..."
+
+RUN echo "Downloading Rest on Stomach (optional)..." && \
+    curl -L -H "Authorization: Bearer 31daa44aec2ea7c87e3bf582fd4640a9" \
+        -o /stable-diffusion-webui/models/Lora/rest_on_stomach.safetensors \
+        -f --retry 3 --retry-delay 5 \
+        "https://civitai.com/api/download/models/19847?type=Model&format=SafeTensor&size=full&fp=fp16" || \
+    echo "Warning: Failed to download Rest on Stomach, continuing without it..."
+
+RUN echo "Downloading Buttjob (optional)..." && \
+    curl -L -H "Authorization: Bearer 31daa44aec2ea7c87e3bf582fd4640a9" \
+        -o /stable-diffusion-webui/models/Lora/buttjob.safetensors \
+        -f --retry 3 --retry-delay 5 \
+        "https://civitai.com/api/download/models/22057?type=Model&format=SafeTensor&size=full&fp=fp16" || \
+    echo "Warning: Failed to download Buttjob, continuing without it..."
+
+RUN echo "Downloading NoobAI-XL Detailer (optional)..." && \
+    curl -L -H "Authorization: Bearer 31daa44aec2ea7c87e3bf582fd4640a9" \
+        -o /stable-diffusion-webui/models/Lora/noobai_xl_detailer.safetensors \
+        -f --retry 3 --retry-delay 5 \
+        "https://civitai.com/api/download/models/1209350?type=Model&format=SafeTensor" || \
+    echo "Warning: Failed to download NoobAI-XL Detailer, continuing without it..."
+
+RUN echo "Downloading POV Spitroast (optional)..." && \
+    curl -L -H "Authorization: Bearer 31daa44aec2ea7c87e3bf582fd4640a9" \
+        -o /stable-diffusion-webui/models/Lora/pov_spitroast.safetensors \
+        -f --retry 3 --retry-delay 5 \
+        "https://civitai.com/api/download/models/95762?type=Model&format=SafeTensor" || \
+    echo "Warning: Failed to download POV Spitroast, continuing without it..."
 
 # Verify downloads and clean up any empty files
 RUN echo "Verifying downloads..." && \
