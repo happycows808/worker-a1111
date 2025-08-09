@@ -24,12 +24,13 @@ ARG A1111_RELEASE="v1.9.3"
 RUN git clone https://github.com/AUTOMATIC1111/stable-diffusion-webui.git "$ROOT" \
  && cd "$ROOT" && git checkout -q "${A1111_RELEASE}"
 
-# Torch CUDA 12.1 + xformers
+# Torch CUDA 12.1 + xformers (FIXED VERSION)
 RUN python3 -m pip install --upgrade pip \
  && pip install --no-cache-dir \
       torch==2.2.1+cu121 torchvision==0.17.1+cu121 torchaudio==2.2.1+cu121 \
       --index-url https://download.pytorch.org/whl/cu121 \
- && pip install --no-cache-dir xformers==0.0.24.post1
+ && pip install --no-cache-dir xformers==0.0.25.post1 \
+      --index-url https://download.pytorch.org/whl/cu121
 
 # Install A1111 requirements
 RUN pip install --no-cache-dir -r "$ROOT/requirements_versions.txt"
@@ -42,8 +43,7 @@ RUN git clone https://github.com/Bing-su/adetailer.git \
  && cd adetailer && git checkout -q 26f1b6a || true
 WORKDIR $ROOT
 
-# PRE-INSTALL ALL EXTENSION DEPENDENCIES (this is the key part!)
-# Install A1111 base dependencies
+# PRE-INSTALL ALL EXTENSION DEPENDENCIES
 RUN pip install --no-cache-dir \
     clip \
     open-clip-torch \
@@ -51,7 +51,7 @@ RUN pip install --no-cache-dir \
     fastapi==0.94.0 \
     gradio==3.41.2
 
-# Install ADetailer dependencies specifically
+# Install ADetailer dependencies
 RUN pip install --no-cache-dir \
     ultralytics>=8.0.75 \
     mediapipe \
@@ -63,7 +63,7 @@ RUN pip install --no-cache-dir \
     opencv-contrib-python \
     scikit-image
 
-# Pre-create all necessary directories
+# Create all necessary directories
 RUN mkdir -p \
   "$ROOT/models/Stable-diffusion" \
   "$ROOT/models/Lora" \
@@ -75,7 +75,7 @@ RUN mkdir -p \
   "$ROOT/embeddings" \
   "$ROOT/textual_inversion"
 
-# Clone required repositories that A1111 needs
+# Clone required repositories
 WORKDIR $ROOT/repositories
 RUN git clone https://github.com/Stability-AI/stablediffusion.git stable-diffusion-stability-ai \
  && git clone https://github.com/Stability-AI/generative-models.git generative-models \
@@ -84,7 +84,7 @@ RUN git clone https://github.com/Stability-AI/stablediffusion.git stable-diffusi
  && git clone https://github.com/sczhou/CodeFormer.git CodeFormer
 WORKDIR $ROOT
 
-# Download models with build-time checks
+# Download your models
 RUN echo "Downloading checkpoint..." \
  && curl -fsSL --retry 5 -H "Authorization: Bearer ${CIVITAI_TOKEN}" \
     -o "$ROOT/models/Stable-diffusion/primary_model.safetensors" \
@@ -123,7 +123,7 @@ RUN echo "Downloading 4x-UltraSharp..." \
     "https://huggingface.co/lokCX/4x-Ultrasharp/resolve/main/4x-UltraSharp.pth" \
  && echo "4x-UltraSharp downloaded"
 
-# Download ControlNet models (with progress)
+# Download ControlNet models
 RUN echo "Downloading ControlNet OpenPose..." \
  && curl -L --retry 5 \
     -o "$ROOT/models/ControlNet/control_v11p_sd15_openpose.pth" \
@@ -139,10 +139,10 @@ RUN echo "Downloading ControlNet Depth..." \
 # Set default config
 RUN echo '{"sd_model_checkpoint": "primary_model.safetensors", "CLIP_stop_at_last_layers": 2}' > "$ROOT/config.json"
 
-# Pre-compile Python modules to speed up startup
+# Pre-compile Python modules
 RUN python3 -m compileall "$ROOT" || true
 
-# Create a startup script that bypasses dependency checks
+# Create startup script
 RUN echo '#!/bin/bash\n\
 export COMMANDLINE_ARGS="--api --nowebui --listen --enable-insecure-extension-access --xformers --opt-sdp-attention --skip-install"\n\
 export LD_PRELOAD="/usr/lib/x86_64-linux-gnu/libtcmalloc_minimal.so.4"\n\
@@ -153,11 +153,10 @@ python3 launch.py --skip-torch-cuda-test --skip-python-version-check --skip-inst
 # Launch flags
 ENV COMMANDLINE_ARGS="--api --nowebui --listen --enable-insecure-extension-access --xformers --opt-sdp-attention --skip-install"
 
-# Healthcheck with longer start period for big models
+# Healthcheck
 HEALTHCHECK --interval=30s --timeout=10s --start-period=300s --retries=20 \
   CMD curl -fsSL http://127.0.0.1:7860/sdapi/v1/sd-models >/dev/null || exit 1
 
-# Set tcmalloc for performance
 ENV LD_PRELOAD="/usr/lib/x86_64-linux-gnu/libtcmalloc_minimal.so.4"
 
 WORKDIR $ROOT
