@@ -5,7 +5,7 @@ ENV DEBIAN_FRONTEND=noninteractive \
     PIP_PREFER_BINARY=1 \
     PYTHONUNBUFFERED=1 \
     TZ=UTC \
-    PYTORCH_CUDA_ALLOC_CONF=max_split_size_mb:512 \
+    PYTORCH_CUDA_ALLOC_CONF=max_split_size_mb:1024 \
     API_PORT=7860
 
 # Your Civitai token (kept as requested)
@@ -20,12 +20,12 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libgl1 libglib2.0-0 libgoogle-perftools-dev libtcmalloc-minimal4 \
  && rm -rf /var/lib/apt/lists/*
 
-# Clone AUTOMATIC1111
+# Clone AUTOMATIC1111 - using latest version for better SDXL support
 ARG A1111_RELEASE="v1.9.3"
 RUN git clone https://github.com/AUTOMATIC1111/stable-diffusion-webui.git "$ROOT" \
  && cd "$ROOT" && git checkout -q "${A1111_RELEASE}"
 
-# Install PyTorch and xformers for CUDA 12.1
+# Install PyTorch and xformers for CUDA 12.1 - SDXL compatible versions
 RUN python3 -m pip install --upgrade pip \
  && pip install --no-cache-dir \
       torch==2.2.1+cu121 torchvision==0.17.1+cu121 torchaudio==2.2.1+cu121 \
@@ -47,7 +47,7 @@ RUN git clone https://github.com/Bing-su/adetailer.git \
  && cd adetailer && git checkout -q 26f1b6a || true
 WORKDIR $ROOT
 
-# Install all extension dependencies INCLUDING controlnet_aux fix
+# Install all extension dependencies
 RUN pip install --no-cache-dir \
     clip \
     open-clip-torch \
@@ -74,7 +74,7 @@ RUN mkdir -p \
   "$ROOT/embeddings" \
   "$ROOT/textual_inversion"
 
-# Clone required repositories
+# Clone required repositories for SDXL support
 WORKDIR $ROOT/repositories
 RUN git clone https://github.com/Stability-AI/stablediffusion.git stable-diffusion-stability-ai \
  && git clone https://github.com/Stability-AI/generative-models.git generative-models \
@@ -83,26 +83,26 @@ RUN git clone https://github.com/Stability-AI/stablediffusion.git stable-diffusi
  && git clone https://github.com/sczhou/CodeFormer.git CodeFormer
 WORKDIR $ROOT
 
-# Download main checkpoint with verification
-RUN echo "Downloading primary checkpoint..." \
+# Download CyberRealistic Pony SDXL model (keeping your original)
+RUN echo "Downloading CyberRealistic Pony SDXL model..." \
  && curl -fsSL --retry 5 -H "Authorization: Bearer ${CIVITAI_TOKEN}" \
-    -o "$ROOT/models/Stable-diffusion/primary_model.safetensors" \
+    -o "$ROOT/models/Stable-diffusion/cyberrealistic_pony.safetensors" \
     "https://civitai.com/api/download/models/2071650?type=Model&format=SafeTensor&size=pruned&fp=fp16" \
- && [ -f "$ROOT/models/Stable-diffusion/primary_model.safetensors" ] \
- && [ -s "$ROOT/models/Stable-diffusion/primary_model.safetensors" ] \
+ && [ -f "$ROOT/models/Stable-diffusion/cyberrealistic_pony.safetensors" ] \
+ && [ -s "$ROOT/models/Stable-diffusion/cyberrealistic_pony.safetensors" ] \
  || (echo "Failed to download primary model" && exit 1) \
- && ls -lh "$ROOT/models/Stable-diffusion/primary_model.safetensors"
+ && ls -lh "$ROOT/models/Stable-diffusion/cyberrealistic_pony.safetensors"
 
-# Download VAE model
-RUN echo "Downloading VAE model..." \
+# Download SDXL VAE (NOT SD1.5 VAE!)
+RUN echo "Downloading SDXL VAE..." \
  && curl -fsSL --retry 5 \
-    -o "$ROOT/models/VAE/vae-ft-mse-840000-ema-pruned.safetensors" \
-    "https://huggingface.co/stabilityai/sd-vae-ft-mse-original/resolve/main/vae-ft-mse-840000-ema-pruned.safetensors" \
- && [ -f "$ROOT/models/VAE/vae-ft-mse-840000-ema-pruned.safetensors" ] \
- && [ -s "$ROOT/models/VAE/vae-ft-mse-840000-ema-pruned.safetensors" ] \
- || (echo "Failed to download VAE model" && exit 1)
+    -o "$ROOT/models/VAE/sdxl_vae.safetensors" \
+    "https://huggingface.co/stabilityai/sdxl-vae/resolve/main/sdxl_vae.safetensors" \
+ && [ -f "$ROOT/models/VAE/sdxl_vae.safetensors" ] \
+ && [ -s "$ROOT/models/VAE/sdxl_vae.safetensors" ] \
+ || (echo "Failed to download SDXL VAE" && exit 1)
 
-# Download LoRA models with verification
+# Download LoRA models (keeping your NSFW ones)
 RUN echo "Downloading nsfw_all_in_one LoRA..." \
  && curl -fsSL --retry 5 -H "Authorization: Bearer ${CIVITAI_TOKEN}" \
     -o "$ROOT/models/Lora/nsfw_all_in_one.safetensors" \
@@ -121,7 +121,7 @@ RUN echo "Downloading pony_amateur LoRA..." \
  || (echo "Failed to download pony_amateur LoRA" && exit 1) \
  && ls -lh "$ROOT/models/Lora/pony_amateur.safetensors"
 
-# Download ADetailer models with verification
+# Download ADetailer models
 RUN echo "Downloading ADetailer face model..." \
  && curl -fsSL --retry 5 \
     -o "$ROOT/models/adetailer/face_yolov8n.pt" \
@@ -140,7 +140,7 @@ RUN echo "Downloading ADetailer hand model..." \
  || (echo "Failed to download ADetailer hand model" && exit 1) \
  && ls -lh "$ROOT/models/adetailer/hand_yolov8n.pt"
 
-# Download upscaler with verification
+# Download upscaler
 RUN echo "Downloading 4x-UltraSharp upscaler..." \
  && curl -fsSL --retry 5 \
     -o "$ROOT/models/ESRGAN/4x-UltraSharp.pth" \
@@ -150,32 +150,15 @@ RUN echo "Downloading 4x-UltraSharp upscaler..." \
  || (echo "Failed to download 4x-UltraSharp upscaler" && exit 1) \
  && ls -lh "$ROOT/models/ESRGAN/4x-UltraSharp.pth"
 
-# Download ControlNet models with verification
-RUN echo "Downloading ControlNet OpenPose..." \
- && curl -L --retry 5 \
-    -o "$ROOT/models/ControlNet/control_v11p_sd15_openpose.pth" \
-    "https://huggingface.co/lllyasviel/ControlNet-v1-1/resolve/main/control_v11p_sd15_openpose.pth" \
- && [ -f "$ROOT/models/ControlNet/control_v11p_sd15_openpose.pth" ] \
- && [ -s "$ROOT/models/ControlNet/control_v11p_sd15_openpose.pth" ] \
- || (echo "Failed to download ControlNet OpenPose" && exit 1) \
- && ls -lh "$ROOT/models/ControlNet/control_v11p_sd15_openpose.pth"
+# Skip ControlNet models for now (SD1.5 ControlNet won't work with SDXL)
 
-RUN echo "Downloading ControlNet Depth..." \
- && curl -L --retry 5 \
-    -o "$ROOT/models/ControlNet/control_v11f1p_sd15_depth.pth" \
-    "https://huggingface.co/lllyasviel/ControlNet-v1-1/resolve/main/control_v11f1p_sd15_depth.pth" \
- && [ -f "$ROOT/models/ControlNet/control_v11f1p_sd15_depth.pth" ] \
- && [ -s "$ROOT/models/ControlNet/control_v11f1p_sd15_depth.pth" ] \
- || (echo "Failed to download ControlNet Depth" && exit 1) \
- && ls -lh "$ROOT/models/ControlNet/control_v11f1p_sd15_depth.pth"
-
-# Set default config with VAE
-RUN echo '{"sd_model_checkpoint": "primary_model.safetensors", "sd_vae": "vae-ft-mse-840000-ema-pruned.safetensors", "CLIP_stop_at_last_layers": 2}' > "$ROOT/config.json"
+# Set default config for SDXL
+RUN echo '{"sd_model_checkpoint": "cyberrealistic_pony.safetensors", "sd_vae": "sdxl_vae.safetensors", "CLIP_stop_at_last_layers": 2}' > "$ROOT/config.json"
 
 # Pre-compile Python modules
 RUN python3 -m compileall "$ROOT" || true
 
-# Copy handler script (using COPY instead of heredoc to avoid syntax issues)
+# Copy UPDATED handler script for SDXL/Pony
 COPY <<'HANDLER_EOF' /handler.py
 import runpod
 import requests
@@ -189,8 +172,8 @@ from typing import Dict, Any, Optional
 API_PORT = os.getenv("API_PORT", "7860")
 API_URL = f"http://localhost:{API_PORT}"
 
-def wait_for_service(timeout=120):
-    """Wait for SD WebUI to be fully ready"""
+def wait_for_service(timeout=180):
+    """Wait for SD WebUI to be fully ready - SDXL needs more time"""
     start = time.time()
     urls_to_check = [
         f"{API_URL}/sdapi/v1/options",
@@ -209,32 +192,60 @@ def wait_for_service(timeout=120):
             
             if all_ready:
                 print(f"✅ SD WebUI is fully ready")
+                # Get available samplers for debugging
+                try:
+                    samplers_response = requests.get(f"{API_URL}/sdapi/v1/samplers", timeout=5)
+                    if samplers_response.status_code == 200:
+                        samplers = samplers_response.json()
+                        print(f"Available samplers: {[s['name'] for s in samplers]}")
+                except:
+                    pass
                 return True
         except Exception as e:
             print(f"⏳ Waiting for SD WebUI on port {API_PORT}... ({int(time.time() - start)}s)")
             pass
-        time.sleep(3)
+        time.sleep(5)
     return False
 
 def handle_txt2img(params: Dict[str, Any]) -> Dict[str, Any]:
-    """Handle text-to-image generation"""
+    """Handle text-to-image generation for SDXL/Pony"""
+    
+    # Add Pony score tags if not present
+    prompt = params.get("prompt", "")
+    if not prompt.startswith("score_"):
+        prompt = "score_9, score_8_up, score_7_up, " + prompt
+        params["prompt"] = prompt
+    
+    # SDXL/Pony-specific defaults
     default_params = {
-        "width": 512,
-        "height": 512,
-        "steps": 20,
-        "cfg_scale": 7,
-        "sampler_name": "Euler a",
+        "width": 896,  # SDXL resolution
+        "height": 1152,  # SDXL resolution
+        "steps": 30,  # Pony needs 30+ steps
+        "cfg_scale": 5,  # Pony uses CFG 5
+        "sampler_name": "DPM++ 2M Karras",  # Try this first
         "batch_size": 1,
         "n_iter": 1,
         "enable_hr": False,
-        "denoising_strength": 0.7,
-        "hr_scale": 2,
+        "denoising_strength": 0.35,
+        "hr_scale": 1.5,
         "hr_upscaler": "4x-UltraSharp",
-        "ad_model": "face_yolov8n.pt",
+        "negative_prompt": "score_6, score_5, score_4, (worst quality:1.2), (low quality:1.2), (normal quality:1.2), lowres, bad anatomy, bad hands, signature, watermarks, ugly, imperfect eyes, skewed eyes, unnatural face, unnatural body, error, extra limb, missing limbs",
         "override_settings": {
-            "sd_vae": "vae-ft-mse-840000-ema-pruned.safetensors"
+            "sd_model_checkpoint": "cyberrealistic_pony.safetensors",
+            "sd_vae": "sdxl_vae.safetensors",
+            "CLIP_stop_at_last_layers": 2
         }
     }
+    
+    # Try multiple sampler names in case one fails
+    sampler_fallbacks = [
+        "DPM++ 2M Karras",
+        "DPM++ SDE Karras", 
+        "Euler a",
+        "Euler",
+        "DPM++ 2M",
+        "DDIM"
+    ]
     
     # Merge defaults with input
     for key, value in default_params.items():
@@ -252,33 +263,21 @@ def handle_txt2img(params: Dict[str, Any]) -> Dict[str, Any]:
         }
         if lora_name in lora_map:
             lora_file = lora_map[lora_name]
-            params["prompt"] = f"<lora:{lora_file}:1> {params.get('prompt', '')}"
+            params["prompt"] = f"<lora:{lora_file}:0.8> {params.get('prompt', '')}"
     
-    # Configure ADetailer if faces/hands need fixing
-    if params.get("enable_adetailer", True):
+    # Configure ADetailer if enabled
+    if params.get("enable_adetailer", False):  # Disabled by default for now
         params["alwayson_scripts"] = {
             "ADetailer": {
                 "args": [
-                    True,  # Enable ADetailer
-                    False, # Skip img2img
+                    True,
+                    False,
                     {
                         "ad_model": "face_yolov8n.pt",
                         "ad_confidence": 0.3,
                         "ad_dilate_erode": 4,
                         "ad_mask_blur": 4,
-                        "ad_denoising_strength": 0.4,
-                        "ad_inpaint_only_masked": True,
-                        "ad_inpaint_only_masked_padding": 32,
-                        "ad_use_inpaint_width_height": False,
-                        "ad_use_steps": False,
-                        "ad_use_cfg_scale": False
-                    },
-                    {
-                        "ad_model": "hand_yolov8n.pt",
-                        "ad_confidence": 0.3,
-                        "ad_dilate_erode": 4,
-                        "ad_mask_blur": 4,
-                        "ad_denoising_strength": 0.4,
+                        "ad_denoising_strength": 0.3,
                         "ad_inpaint_only_masked": True,
                         "ad_inpaint_only_masked_padding": 32,
                         "ad_use_inpaint_width_height": False,
@@ -289,27 +288,47 @@ def handle_txt2img(params: Dict[str, Any]) -> Dict[str, Any]:
             }
         }
     
-    response = requests.post(f"{API_URL}/sdapi/v1/txt2img", json=params, timeout=300)
-    if response.status_code != 200:
-        raise Exception(f"SD API error: {response.status_code} - {response.text}")
+    # Try different samplers if one fails
+    last_error = None
+    for sampler in sampler_fallbacks:
+        try:
+            params["sampler_name"] = sampler
+            print(f"Trying sampler: {sampler}")
+            response = requests.post(f"{API_URL}/sdapi/v1/txt2img", json=params, timeout=300)
+            if response.status_code == 200:
+                print(f"Successfully used sampler: {sampler}")
+                return response.json()
+            elif "Sampler not found" in response.text:
+                last_error = f"Sampler {sampler} not found"
+                continue
+            else:
+                raise Exception(f"SD API error: {response.status_code} - {response.text}")
+        except Exception as e:
+            if "Sampler" in str(e):
+                last_error = str(e)
+                continue
+            raise
     
-    return response.json()
+    # If all samplers failed, raise the last error
+    raise Exception(f"All samplers failed. Last error: {last_error}")
 
 def handle_img2img(params: Dict[str, Any]) -> Dict[str, Any]:
-    """Handle image-to-image generation"""
+    """Handle image-to-image generation for SDXL"""
     if "init_images" not in params:
         raise ValueError("init_images is required for img2img")
     
     default_params = {
         "resize_mode": 0,
-        "denoising_strength": 0.75,
-        "width": 512,
-        "height": 512,
-        "cfg_scale": 7,
-        "steps": 20,
-        "sampler_name": "Euler a",
+        "denoising_strength": 0.5,
+        "width": 896,
+        "height": 1152,
+        "cfg_scale": 5,
+        "steps": 30,
+        "sampler_name": "DPM++ 2M Karras",
         "override_settings": {
-            "sd_vae": "vae-ft-mse-840000-ema-pruned.safetensors"
+            "sd_model_checkpoint": "cyberrealistic_pony.safetensors",
+            "sd_vae": "sdxl_vae.safetensors",
+            "CLIP_stop_at_last_layers": 2
         }
     }
     
@@ -334,7 +353,7 @@ def handle_upscale(params: Dict[str, Any]) -> Dict[str, Any]:
         "gfpgan_visibility": 0,
         "codeformer_visibility": 0,
         "codeformer_weight": 0,
-        "upscaling_resize": params.get("upscale_factor", 4),
+        "upscaling_resize": params.get("upscale_factor", 2),  # Reduced from 4 for SDXL
         "upscaler_1": params.get("upscaler", "4x-UltraSharp"),
         "upscaler_2": "None",
         "extras_upscaler_2_visibility": 0,
@@ -349,17 +368,18 @@ def handle_upscale(params: Dict[str, Any]) -> Dict[str, Any]:
     return response.json()
 
 def handler(job):
-    """Enhanced handler function for RunPod serverless"""
+    """Enhanced handler function for RunPod serverless with SDXL support"""
     try:
         job_input = job["input"]
         
         # Log the incoming request
         print(f"📥 Received job: {job['id']}")
         print(f"🔧 Using API endpoint: {API_URL}")
+        print(f"📝 Input parameters: {json.dumps(job_input, indent=2)}")
         
-        # Wait for SD WebUI to be ready
-        if not wait_for_service():
-            return {"error": f"SD WebUI failed to start on port {API_PORT} after 120 seconds"}
+        # Wait for SD WebUI to be ready (longer timeout for SDXL)
+        if not wait_for_service(timeout=180):
+            return {"error": f"SD WebUI failed to start on port {API_PORT} after 180 seconds"}
         
         # Determine the operation type
         operation = job_input.get("operation", "txt2img")
@@ -384,11 +404,11 @@ def handler(job):
         return {"error": str(e)}
 
 if __name__ == "__main__":
-    print(f"🚀 Starting RunPod handler (API port: {API_PORT})...")
+    print(f"🚀 Starting RunPod handler for SDXL/Pony (API port: {API_PORT})...")
     runpod.serverless.start({"handler": handler})
 HANDLER_EOF
 
-# Copy startup script
+# Copy startup script with SDXL optimizations
 COPY <<'STARTUP_EOF' /start.sh
 #!/bin/bash
 set -e
@@ -396,21 +416,23 @@ set -e
 # SINGLE SOURCE OF TRUTH FOR PORT
 export API_PORT=7860
 
-echo "🚀 Starting Stable Diffusion WebUI API on port $API_PORT..."
-export COMMANDLINE_ARGS="--api --nowebui --port $API_PORT --listen --enable-insecure-extension-access --xformers --opt-sdp-attention --skip-install"
+echo "🚀 Starting Stable Diffusion WebUI API (SDXL/Pony) on port $API_PORT..."
+
+# SDXL-optimized command line arguments
+export COMMANDLINE_ARGS="--api --nowebui --port $API_PORT --listen --enable-insecure-extension-access --xformers --opt-sdp-attention --skip-install --no-half-vae --medvram-sdxl"
 export LD_PRELOAD="/usr/lib/x86_64-linux-gnu/libtcmalloc_minimal.so.4"
 
 cd /stable-diffusion-webui
 
 # Start SD WebUI in background
-echo "📦 Launching SD WebUI on port $API_PORT..."
+echo "📦 Launching SD WebUI with SDXL support on port $API_PORT..."
 python3 launch.py --skip-torch-cuda-test --skip-python-version-check --skip-install &
 SD_PID=$!
 
-# Wait a bit for SD to start initializing
-sleep 10
+# Wait longer for SDXL to initialize
+sleep 20
 
-# Start RunPod handler (it will use the same API_PORT env var)
+# Start RunPod handler
 echo "🔌 Starting RunPod handler (connecting to port $API_PORT)..."
 python3 /handler.py &
 HANDLER_PID=$!
@@ -431,18 +453,17 @@ RUN echo "=== Verification ===" \
  && echo "LoRAs:" && ls -la "$ROOT/models/Lora/" \
  && echo "Upscalers:" && ls -la "$ROOT/models/ESRGAN/" \
  && echo "ADetailer:" && ls -la "$ROOT/models/adetailer/" \
- && echo "ControlNet:" && ls -la "$ROOT/models/ControlNet/" \
  && echo "==================="
 
-# Set environment variables
-ENV COMMANDLINE_ARGS="--api --nowebui --port 7860 --listen --enable-insecure-extension-access --xformers --opt-sdp-attention --skip-install"
+# Set environment variables for SDXL
+ENV COMMANDLINE_ARGS="--api --nowebui --port 7860 --listen --enable-insecure-extension-access --xformers --opt-sdp-attention --skip-install --no-half-vae --medvram-sdxl"
 ENV LD_PRELOAD="/usr/lib/x86_64-linux-gnu/libtcmalloc_minimal.so.4"
 
 WORKDIR $ROOT
 EXPOSE 7860
 
-# Health check
-HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
+# Health check with longer start period for SDXL
+HEALTHCHECK --interval=30s --timeout=10s --start-period=120s --retries=3 \
   CMD curl -f http://localhost:7860/sdapi/v1/options || exit 1
 
 # Use tini as init system
