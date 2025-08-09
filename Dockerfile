@@ -5,16 +5,17 @@ ENV DEBIAN_FRONTEND=noninteractive \
     PIP_PREFER_BINARY=1 \
     PYTHONUNBUFFERED=1 \
     TZ=UTC \
-    PYTORCH_CUDA_ALLOC_CONF=max_split_size_mb:128
+    PYTORCH_CUDA_ALLOC_CONF=max_split_size_mb:512 \
+    API_PORT=7860
 
-# Your Civitai token
+# Your Civitai token (kept as requested)
 ENV CIVITAI_TOKEN="cbc8f589f04ba1a0299b10473a792b42"
 
 SHELL ["/bin/bash", "-o", "pipefail", "-c"]
 
 # Base dependencies
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    git curl wget ca-certificates tini jq procps \
+    git git-lfs curl wget ca-certificates tini jq procps \
     python3 python3-venv python3-pip \
     libgl1 libglib2.0-0 libgoogle-perftools-dev libtcmalloc-minimal4 \
  && rm -rf /var/lib/apt/lists/*
@@ -82,86 +83,132 @@ RUN git clone https://github.com/Stability-AI/stablediffusion.git stable-diffusi
  && git clone https://github.com/sczhou/CodeFormer.git CodeFormer
 WORKDIR $ROOT
 
-# Download main checkpoint
+# Download main checkpoint with verification
 RUN echo "Downloading primary checkpoint..." \
  && curl -fsSL --retry 5 -H "Authorization: Bearer ${CIVITAI_TOKEN}" \
     -o "$ROOT/models/Stable-diffusion/primary_model.safetensors" \
     "https://civitai.com/api/download/models/2071650?type=Model&format=SafeTensor&size=pruned&fp=fp16" \
+ && [ -f "$ROOT/models/Stable-diffusion/primary_model.safetensors" ] \
+ && [ -s "$ROOT/models/Stable-diffusion/primary_model.safetensors" ] \
+ || (echo "Failed to download primary model" && exit 1) \
  && ls -lh "$ROOT/models/Stable-diffusion/primary_model.safetensors"
 
-# Download LoRA models
+# Download VAE model
+RUN echo "Downloading VAE model..." \
+ && curl -fsSL --retry 5 \
+    -o "$ROOT/models/VAE/vae-ft-mse-840000-ema-pruned.safetensors" \
+    "https://huggingface.co/stabilityai/sd-vae-ft-mse-original/resolve/main/vae-ft-mse-840000-ema-pruned.safetensors" \
+ && [ -f "$ROOT/models/VAE/vae-ft-mse-840000-ema-pruned.safetensors" ] \
+ && [ -s "$ROOT/models/VAE/vae-ft-mse-840000-ema-pruned.safetensors" ] \
+ || (echo "Failed to download VAE model" && exit 1)
+
+# Download LoRA models with verification
 RUN echo "Downloading nsfw_all_in_one LoRA..." \
  && curl -fsSL --retry 5 -H "Authorization: Bearer ${CIVITAI_TOKEN}" \
     -o "$ROOT/models/Lora/nsfw_all_in_one.safetensors" \
     "https://civitai.com/api/download/models/160240?type=Model&format=SafeTensor" \
+ && [ -f "$ROOT/models/Lora/nsfw_all_in_one.safetensors" ] \
+ && [ -s "$ROOT/models/Lora/nsfw_all_in_one.safetensors" ] \
+ || (echo "Failed to download nsfw_all_in_one LoRA" && exit 1) \
  && ls -lh "$ROOT/models/Lora/nsfw_all_in_one.safetensors"
 
 RUN echo "Downloading pony_amateur LoRA..." \
  && curl -fsSL --retry 5 -H "Authorization: Bearer ${CIVITAI_TOKEN}" \
     -o "$ROOT/models/Lora/pony_amateur.safetensors" \
     "https://civitai.com/api/download/models/717403?type=Model&format=SafeTensor" \
+ && [ -f "$ROOT/models/Lora/pony_amateur.safetensors" ] \
+ && [ -s "$ROOT/models/Lora/pony_amateur.safetensors" ] \
+ || (echo "Failed to download pony_amateur LoRA" && exit 1) \
  && ls -lh "$ROOT/models/Lora/pony_amateur.safetensors"
 
-# Download ADetailer models
+# Download ADetailer models with verification
 RUN echo "Downloading ADetailer face model..." \
  && curl -fsSL --retry 5 \
     -o "$ROOT/models/adetailer/face_yolov8n.pt" \
     "https://huggingface.co/Bingsu/adetailer/resolve/main/face_yolov8n.pt" \
+ && [ -f "$ROOT/models/adetailer/face_yolov8n.pt" ] \
+ && [ -s "$ROOT/models/adetailer/face_yolov8n.pt" ] \
+ || (echo "Failed to download ADetailer face model" && exit 1) \
  && ls -lh "$ROOT/models/adetailer/face_yolov8n.pt"
 
 RUN echo "Downloading ADetailer hand model..." \
  && curl -fsSL --retry 5 \
     -o "$ROOT/models/adetailer/hand_yolov8n.pt" \
     "https://huggingface.co/Bingsu/adetailer/resolve/main/hand_yolov8n.pt" \
+ && [ -f "$ROOT/models/adetailer/hand_yolov8n.pt" ] \
+ && [ -s "$ROOT/models/adetailer/hand_yolov8n.pt" ] \
+ || (echo "Failed to download ADetailer hand model" && exit 1) \
  && ls -lh "$ROOT/models/adetailer/hand_yolov8n.pt"
 
-# Download upscaler
+# Download upscaler with verification
 RUN echo "Downloading 4x-UltraSharp upscaler..." \
  && curl -fsSL --retry 5 \
     -o "$ROOT/models/ESRGAN/4x-UltraSharp.pth" \
     "https://huggingface.co/lokCX/4x-Ultrasharp/resolve/main/4x-UltraSharp.pth" \
+ && [ -f "$ROOT/models/ESRGAN/4x-UltraSharp.pth" ] \
+ && [ -s "$ROOT/models/ESRGAN/4x-UltraSharp.pth" ] \
+ || (echo "Failed to download 4x-UltraSharp upscaler" && exit 1) \
  && ls -lh "$ROOT/models/ESRGAN/4x-UltraSharp.pth"
 
-# Download ControlNet models
+# Download ControlNet models with verification
 RUN echo "Downloading ControlNet OpenPose..." \
  && curl -L --retry 5 \
     -o "$ROOT/models/ControlNet/control_v11p_sd15_openpose.pth" \
     "https://huggingface.co/lllyasviel/ControlNet-v1-1/resolve/main/control_v11p_sd15_openpose.pth" \
+ && [ -f "$ROOT/models/ControlNet/control_v11p_sd15_openpose.pth" ] \
+ && [ -s "$ROOT/models/ControlNet/control_v11p_sd15_openpose.pth" ] \
+ || (echo "Failed to download ControlNet OpenPose" && exit 1) \
  && ls -lh "$ROOT/models/ControlNet/control_v11p_sd15_openpose.pth"
 
 RUN echo "Downloading ControlNet Depth..." \
  && curl -L --retry 5 \
     -o "$ROOT/models/ControlNet/control_v11f1p_sd15_depth.pth" \
     "https://huggingface.co/lllyasviel/ControlNet-v1-1/resolve/main/control_v11f1p_sd15_depth.pth" \
+ && [ -f "$ROOT/models/ControlNet/control_v11f1p_sd15_depth.pth" ] \
+ && [ -s "$ROOT/models/ControlNet/control_v11f1p_sd15_depth.pth" ] \
+ || (echo "Failed to download ControlNet Depth" && exit 1) \
  && ls -lh "$ROOT/models/ControlNet/control_v11f1p_sd15_depth.pth"
 
-# Set default config
-RUN echo '{"sd_model_checkpoint": "primary_model.safetensors", "CLIP_stop_at_last_layers": 2}' > "$ROOT/config.json"
+# Set default config with VAE
+RUN echo '{"sd_model_checkpoint": "primary_model.safetensors", "sd_vae": "vae-ft-mse-840000-ema-pruned.safetensors", "CLIP_stop_at_last_layers": 2}' > "$ROOT/config.json"
 
 # Pre-compile Python modules
 RUN python3 -m compileall "$ROOT" || true
 
-# CREATE RUNPOD HANDLER with dynamic port detection
-RUN cat > /handler.py << 'EOF'
+# Copy handler script (using COPY instead of heredoc to avoid syntax issues)
+COPY <<'HANDLER_EOF' /handler.py
 import runpod
 import requests
 import time
 import json
 import os
+import base64
+from typing import Dict, Any, Optional
 
-# Get port from environment variable - this ensures consistency
+# Get port from environment variable
 API_PORT = os.getenv("API_PORT", "7860")
 API_URL = f"http://localhost:{API_PORT}"
 
 def wait_for_service(timeout=120):
-    """Wait for SD WebUI to be ready"""
+    """Wait for SD WebUI to be fully ready"""
     start = time.time()
-    url = f"{API_URL}/sdapi/v1/options"
+    urls_to_check = [
+        f"{API_URL}/sdapi/v1/options",
+        f"{API_URL}/sdapi/v1/sd-models",
+        f"{API_URL}/sdapi/v1/samplers"
+    ]
+    
     while time.time() - start < timeout:
         try:
-            response = requests.get(url, timeout=5)
-            if response.status_code == 200:
-                print(f"✅ SD WebUI is ready at {url}")
+            all_ready = True
+            for url in urls_to_check:
+                response = requests.get(url, timeout=5)
+                if response.status_code != 200:
+                    all_ready = False
+                    break
+            
+            if all_ready:
+                print(f"✅ SD WebUI is fully ready")
                 return True
         except Exception as e:
             print(f"⏳ Waiting for SD WebUI on port {API_PORT}... ({int(time.time() - start)}s)")
@@ -169,8 +216,140 @@ def wait_for_service(timeout=120):
         time.sleep(3)
     return False
 
+def handle_txt2img(params: Dict[str, Any]) -> Dict[str, Any]:
+    """Handle text-to-image generation"""
+    default_params = {
+        "width": 512,
+        "height": 512,
+        "steps": 20,
+        "cfg_scale": 7,
+        "sampler_name": "Euler a",
+        "batch_size": 1,
+        "n_iter": 1,
+        "enable_hr": False,
+        "denoising_strength": 0.7,
+        "hr_scale": 2,
+        "hr_upscaler": "4x-UltraSharp",
+        "ad_model": "face_yolov8n.pt",
+        "override_settings": {
+            "sd_vae": "vae-ft-mse-840000-ema-pruned.safetensors"
+        }
+    }
+    
+    # Merge defaults with input
+    for key, value in default_params.items():
+        if key not in params:
+            params[key] = value
+    
+    # Handle LoRA if specified
+    if "lora" in params:
+        lora_name = params.pop("lora")
+        lora_map = {
+            "nsfw": "nsfw_all_in_one",
+            "all": "nsfw_all_in_one",
+            "pony": "pony_amateur",
+            "amateur": "pony_amateur"
+        }
+        if lora_name in lora_map:
+            lora_file = lora_map[lora_name]
+            params["prompt"] = f"<lora:{lora_file}:1> {params.get('prompt', '')}"
+    
+    # Configure ADetailer if faces/hands need fixing
+    if params.get("enable_adetailer", True):
+        params["alwayson_scripts"] = {
+            "ADetailer": {
+                "args": [
+                    True,  # Enable ADetailer
+                    False, # Skip img2img
+                    {
+                        "ad_model": "face_yolov8n.pt",
+                        "ad_confidence": 0.3,
+                        "ad_dilate_erode": 4,
+                        "ad_mask_blur": 4,
+                        "ad_denoising_strength": 0.4,
+                        "ad_inpaint_only_masked": True,
+                        "ad_inpaint_only_masked_padding": 32,
+                        "ad_use_inpaint_width_height": False,
+                        "ad_use_steps": False,
+                        "ad_use_cfg_scale": False
+                    },
+                    {
+                        "ad_model": "hand_yolov8n.pt",
+                        "ad_confidence": 0.3,
+                        "ad_dilate_erode": 4,
+                        "ad_mask_blur": 4,
+                        "ad_denoising_strength": 0.4,
+                        "ad_inpaint_only_masked": True,
+                        "ad_inpaint_only_masked_padding": 32,
+                        "ad_use_inpaint_width_height": False,
+                        "ad_use_steps": False,
+                        "ad_use_cfg_scale": False
+                    }
+                ]
+            }
+        }
+    
+    response = requests.post(f"{API_URL}/sdapi/v1/txt2img", json=params, timeout=300)
+    if response.status_code != 200:
+        raise Exception(f"SD API error: {response.status_code} - {response.text}")
+    
+    return response.json()
+
+def handle_img2img(params: Dict[str, Any]) -> Dict[str, Any]:
+    """Handle image-to-image generation"""
+    if "init_images" not in params:
+        raise ValueError("init_images is required for img2img")
+    
+    default_params = {
+        "resize_mode": 0,
+        "denoising_strength": 0.75,
+        "width": 512,
+        "height": 512,
+        "cfg_scale": 7,
+        "steps": 20,
+        "sampler_name": "Euler a",
+        "override_settings": {
+            "sd_vae": "vae-ft-mse-840000-ema-pruned.safetensors"
+        }
+    }
+    
+    for key, value in default_params.items():
+        if key not in params:
+            params[key] = value
+    
+    response = requests.post(f"{API_URL}/sdapi/v1/img2img", json=params, timeout=300)
+    if response.status_code != 200:
+        raise Exception(f"SD API error: {response.status_code} - {response.text}")
+    
+    return response.json()
+
+def handle_upscale(params: Dict[str, Any]) -> Dict[str, Any]:
+    """Handle image upscaling"""
+    if "image" not in params:
+        raise ValueError("image is required for upscaling")
+    
+    upscale_params = {
+        "resize_mode": 0,
+        "show_extras_results": True,
+        "gfpgan_visibility": 0,
+        "codeformer_visibility": 0,
+        "codeformer_weight": 0,
+        "upscaling_resize": params.get("upscale_factor", 4),
+        "upscaler_1": params.get("upscaler", "4x-UltraSharp"),
+        "upscaler_2": "None",
+        "extras_upscaler_2_visibility": 0,
+        "upscale_first": False,
+        "image": params["image"]
+    }
+    
+    response = requests.post(f"{API_URL}/sdapi/v1/extra-single-image", json=upscale_params, timeout=300)
+    if response.status_code != 200:
+        raise Exception(f"SD API error: {response.status_code} - {response.text}")
+    
+    return response.json()
+
 def handler(job):
-    """Handler function for RunPod serverless"""
+    """Enhanced handler function for RunPod serverless"""
     try:
         job_input = job["input"]
         
@@ -182,66 +361,35 @@ def handler(job):
         if not wait_for_service():
             return {"error": f"SD WebUI failed to start on port {API_PORT} after 120 seconds"}
         
-        # Set default values if not provided
-        default_params = {
-            "width": 512,
-            "height": 512,
-            "steps": 20,
-            "cfg_scale": 7,
-            "sampler_name": "Euler a",
-            "batch_size": 1,
-            "n_iter": 1,
-            "enable_hr": False,
-            "denoising_strength": 0.7,
-            "hr_scale": 2,
-            "hr_upscaler": "4x-UltraSharp"
-        }
+        # Determine the operation type
+        operation = job_input.get("operation", "txt2img")
         
-        # Merge defaults with input
-        for key, value in default_params.items():
-            if key not in job_input:
-                job_input[key] = value
+        if operation == "txt2img":
+            result = handle_txt2img(job_input)
+        elif operation == "img2img":
+            result = handle_img2img(job_input)
+        elif operation == "upscale":
+            result = handle_upscale(job_input)
+        else:
+            # Default to txt2img for backward compatibility
+            result = handle_txt2img(job_input)
         
-        # Handle LoRA if specified
-        if "lora" in job_input:
-            lora_name = job_input.pop("lora")
-            lora_map = {
-                "nsfw": "nsfw_all_in_one",
-                "all": "nsfw_all_in_one",
-                "pony": "pony_amateur",
-                "amateur": "pony_amateur"
-            }
-            if lora_name in lora_map:
-                # Add LoRA to prompt
-                lora_file = lora_map[lora_name]
-                job_input["prompt"] = f"<lora:{lora_file}:1> {job_input.get('prompt', '')}"
-        
-        # Forward the request to SD WebUI API
-        print(f"📤 Sending request to {API_URL}/sdapi/v1/txt2img")
-        response = requests.post(
-            f"{API_URL}/sdapi/v1/txt2img",
-            json=job_input,
-            timeout=300
-        )
-        
-        if response.status_code != 200:
-            return {"error": f"SD API error: {response.status_code}", "details": response.text}
-        
-        result = response.json()
         print(f"✅ Job {job['id']} completed successfully")
         return result
         
     except Exception as e:
         print(f"❌ Error processing job {job.get('id', 'unknown')}: {str(e)}")
+        import traceback
+        traceback.print_exc()
         return {"error": str(e)}
 
 if __name__ == "__main__":
     print(f"🚀 Starting RunPod handler (API port: {API_PORT})...")
     runpod.serverless.start({"handler": handler})
-EOF
+HANDLER_EOF
 
-# Create startup script with guaranteed port consistency
-RUN cat > /start.sh << 'EOF'
+# Copy startup script
+COPY <<'STARTUP_EOF' /start.sh
 #!/bin/bash
 set -e
 
@@ -270,7 +418,7 @@ HANDLER_PID=$!
 # Monitor both processes
 echo "👀 Monitoring processes..."
 wait $SD_PID $HANDLER_PID
-EOF
+STARTUP_EOF
 
 # Make scripts executable
 RUN chmod +x /start.sh /handler.py
@@ -279,8 +427,11 @@ RUN chmod +x /start.sh /handler.py
 RUN echo "=== Verification ===" \
  && echo "Scripts:" && ls -la /start.sh /handler.py \
  && echo "Models:" && ls -la "$ROOT/models/Stable-diffusion/" \
+ && echo "VAE:" && ls -la "$ROOT/models/VAE/" \
  && echo "LoRAs:" && ls -la "$ROOT/models/Lora/" \
  && echo "Upscalers:" && ls -la "$ROOT/models/ESRGAN/" \
+ && echo "ADetailer:" && ls -la "$ROOT/models/adetailer/" \
+ && echo "ControlNet:" && ls -la "$ROOT/models/ControlNet/" \
  && echo "==================="
 
 # Set environment variables
@@ -289,6 +440,10 @@ ENV LD_PRELOAD="/usr/lib/x86_64-linux-gnu/libtcmalloc_minimal.so.4"
 
 WORKDIR $ROOT
 EXPOSE 7860
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
+  CMD curl -f http://localhost:7860/sdapi/v1/options || exit 1
 
 # Use tini as init system
 ENTRYPOINT ["/usr/bin/tini", "--"]
