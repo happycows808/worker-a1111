@@ -35,6 +35,9 @@ RUN python3 -m pip install --upgrade pip \
 # Install A1111 requirements
 RUN pip install --no-cache-dir -r "$ROOT/requirements_versions.txt"
 
+# IMPORTANT: Install RunPod SDK for serverless
+RUN pip install --no-cache-dir runpod
+
 # Install extensions
 WORKDIR $ROOT/extensions
 RUN git clone https://github.com/Mikubill/sd-webui-controlnet.git \
@@ -43,7 +46,7 @@ RUN git clone https://github.com/Bing-su/adetailer.git \
  && cd adetailer && git checkout -q 26f1b6a || true
 WORKDIR $ROOT
 
-# Install all extension dependencies
+# Install all extension dependencies INCLUDING controlnet_aux fix
 RUN pip install --no-cache-dir \
     clip \
     open-clip-torch \
@@ -55,7 +58,8 @@ RUN pip install --no-cache-dir \
     rich \
     pydantic \
     opencv-contrib-python \
-    scikit-image
+    scikit-image \
+    controlnet_aux
 
 # Create all required directories
 RUN mkdir -p \
@@ -137,29 +141,151 @@ RUN echo '{"sd_model_checkpoint": "primary_model.safetensors", "CLIP_stop_at_las
 # Pre-compile Python modules
 RUN python3 -m compileall "$ROOT" || true
 
-# Create startup script using echo commands (NO HEREDOC!)
-RUN echo '#!/bin/bash' > /start.sh && \
-    echo 'set -e' >> /start.sh && \
-    echo 'echo "Starting Stable Diffusion WebUI API..."' >> /start.sh && \
-    echo 'export COMMANDLINE_ARGS="--api --nowebui --listen --enable-insecure-extension-access --xformers --opt-sdp-attention --skip-install"' >> /start.sh && \
-    echo 'export LD_PRELOAD="/usr/lib/x86_64-linux-gnu/libtcmalloc_minimal.so.4"' >> /start.sh && \
-    echo 'cd /stable-diffusion-webui' >> /start.sh && \
-    echo 'exec python3 launch.py --skip-torch-cuda-test --skip-python-version-check --skip-install' >> /start.sh
+# CREATE RUNPOD HANDLER with dynamic port detection
+RUN cat > /handler.py << 'EOF'
+import runpod
+import requests
+import time
+import json
+import os
 
-# Make script executable and verify it exists
-RUN chmod +x /start.sh \
- && echo "Verifying start.sh:" \
- && ls -la /start.sh \
- && echo "Content of start.sh:" \
- && cat /start.sh
+# Get port from environment variable - this ensures consistency
+API_PORT = os.getenv("API_PORT", "7860")
+API_URL = f"http://localhost:{API_PORT}"
+
+def wait_for_service(timeout=120):
+    """Wait for SD WebUI to be ready"""
+    start = time.time()
+    url = f"{API_URL}/sdapi/v1/options"
+    while time.time() - start < timeout:
+        try:
+            response = requests.get(url, timeout=5)
+            if response.status_code == 200:
+                print(f"✅ SD WebUI is ready at {url}")
+                return True
+        except Exception as e:
+            print(f"⏳ Waiting for SD WebUI on port {API_PORT}... ({int(time.time() - start)}s)")
+            pass
+        time.sleep(3)
+    return False
+
+def handler(job):
+    """Handler function for RunPod serverless"""
+    try:
+        job_input = job["input"]
+        
+        # Log the incoming request
+        print(f"📥 Received job: {job['id']}")
+        print(f"🔧 Using API endpoint: {API_URL}")
+        
+        # Wait for SD WebUI to be ready
+        if not wait_for_service():
+            return {"error": f"SD WebUI failed to start on port {API_PORT} after 120 seconds"}
+        
+        # Set default values if not provided
+        default_params = {
+            "width": 512,
+            "height": 512,
+            "steps": 20,
+            "cfg_scale": 7,
+            "sampler_name": "Euler a",
+            "batch_size": 1,
+            "n_iter": 1,
+            "enable_hr": False,
+            "denoising_strength": 0.7,
+            "hr_scale": 2,
+            "hr_upscaler": "4x-UltraSharp"
+        }
+        
+        # Merge defaults with input
+        for key, value in default_params.items():
+            if key not in job_input:
+                job_input[key] = value
+        
+        # Handle LoRA if specified
+        if "lora" in job_input:
+            lora_name = job_input.pop("lora")
+            lora_map = {
+                "nsfw": "nsfw_all_in_one",
+                "all": "nsfw_all_in_one",
+                "pony": "pony_amateur",
+                "amateur": "pony_amateur"
+            }
+            if lora_name in lora_map:
+                # Add LoRA to prompt
+                lora_file = lora_map[lora_name]
+                job_input["prompt"] = f"<lora:{lora_file}:1> {job_input.get('prompt', '')}"
+        
+        # Forward the request to SD WebUI API
+        print(f"📤 Sending request to {API_URL}/sdapi/v1/txt2img")
+        response = requests.post(
+            f"{API_URL}/sdapi/v1/txt2img",
+            json=job_input,
+            timeout=300
+        )
+        
+        if response.status_code != 200:
+            return {"error": f"SD API error: {response.status_code}", "details": response.text}
+        
+        result = response.json()
+        print(f"✅ Job {job['id']} completed successfully")
+        return result
+        
+    except Exception as e:
+        print(f"❌ Error processing job {job.get('id', 'unknown')}: {str(e)}")
+        return {"error": str(e)}
+
+if __name__ == "__main__":
+    print(f"🚀 Starting RunPod handler (API port: {API_PORT})...")
+    runpod.serverless.start({"handler": handler})
+EOF
+
+# Create startup script with guaranteed port consistency
+RUN cat > /start.sh << 'EOF'
+#!/bin/bash
+set -e
+
+# SINGLE SOURCE OF TRUTH FOR PORT
+export API_PORT=7860
+
+echo "🚀 Starting Stable Diffusion WebUI API on port $API_PORT..."
+export COMMANDLINE_ARGS="--api --nowebui --port $API_PORT --listen --enable-insecure-extension-access --xformers --opt-sdp-attention --skip-install"
+export LD_PRELOAD="/usr/lib/x86_64-linux-gnu/libtcmalloc_minimal.so.4"
+
+cd /stable-diffusion-webui
+
+# Start SD WebUI in background
+echo "📦 Launching SD WebUI on port $API_PORT..."
+python3 launch.py --skip-torch-cuda-test --skip-python-version-check --skip-install &
+SD_PID=$!
+
+# Wait a bit for SD to start initializing
+sleep 10
+
+# Start RunPod handler (it will use the same API_PORT env var)
+echo "🔌 Starting RunPod handler (connecting to port $API_PORT)..."
+python3 /handler.py &
+HANDLER_PID=$!
+
+# Monitor both processes
+echo "👀 Monitoring processes..."
+wait $SD_PID $HANDLER_PID
+EOF
+
+# Make scripts executable
+RUN chmod +x /start.sh /handler.py
+
+# Verify everything is in place
+RUN echo "=== Verification ===" \
+ && echo "Scripts:" && ls -la /start.sh /handler.py \
+ && echo "Models:" && ls -la "$ROOT/models/Stable-diffusion/" \
+ && echo "LoRAs:" && ls -la "$ROOT/models/Lora/" \
+ && echo "Upscalers:" && ls -la "$ROOT/models/ESRGAN/" \
+ && echo "==================="
 
 # Set environment variables
-ENV COMMANDLINE_ARGS="--api --nowebui --listen --enable-insecure-extension-access --xformers --opt-sdp-attention --skip-install"
+ENV COMMANDLINE_ARGS="--api --nowebui --port 7860 --listen --enable-insecure-extension-access --xformers --opt-sdp-attention --skip-install"
 ENV LD_PRELOAD="/usr/lib/x86_64-linux-gnu/libtcmalloc_minimal.so.4"
-
-# Healthcheck
-HEALTHCHECK --interval=30s --timeout=10s --start-period=300s --retries=20 \
-  CMD curl -fsSL http://127.0.0.1:7860/sdapi/v1/sd-models >/dev/null || exit 1
 
 WORKDIR $ROOT
 EXPOSE 7860
