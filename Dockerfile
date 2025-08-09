@@ -137,16 +137,14 @@ RUN echo '{"sd_model_checkpoint": "primary_model.safetensors", "CLIP_stop_at_las
 # Pre-compile Python modules
 RUN python3 -m compileall "$ROOT" || true
 
-# Create the startup script (NO INDENTATION for heredoc content!)
-RUN cat > /start.sh << 'EOF'
-#!/bin/bash
-set -e
-echo "Starting Stable Diffusion WebUI API..."
-export COMMANDLINE_ARGS="--api --nowebui --listen --enable-insecure-extension-access --xformers --opt-sdp-attention --skip-install"
-export LD_PRELOAD="/usr/lib/x86_64-linux-gnu/libtcmalloc_minimal.so.4"
-cd /stable-diffusion-webui
-exec python3 launch.py --skip-torch-cuda-test --skip-python-version-check --skip-install
-EOF
+# Create startup script using echo commands (NO HEREDOC!)
+RUN echo '#!/bin/bash' > /start.sh && \
+    echo 'set -e' >> /start.sh && \
+    echo 'echo "Starting Stable Diffusion WebUI API..."' >> /start.sh && \
+    echo 'export COMMANDLINE_ARGS="--api --nowebui --listen --enable-insecure-extension-access --xformers --opt-sdp-attention --skip-install"' >> /start.sh && \
+    echo 'export LD_PRELOAD="/usr/lib/x86_64-linux-gnu/libtcmalloc_minimal.so.4"' >> /start.sh && \
+    echo 'cd /stable-diffusion-webui' >> /start.sh && \
+    echo 'exec python3 launch.py --skip-torch-cuda-test --skip-python-version-check --skip-install' >> /start.sh
 
 # Make script executable and verify it exists
 RUN chmod +x /start.sh \
