@@ -137,7 +137,7 @@ RUN echo '{"sd_model_checkpoint": "primary_model.safetensors", "CLIP_stop_at_las
 # Pre-compile Python modules
 RUN python3 -m compileall "$ROOT" || true
 
-# Create the startup script using heredoc
+# Create the startup script (NO INDENTATION for heredoc content!)
 RUN cat > /start.sh << 'EOF'
 #!/bin/bash
 set -e
