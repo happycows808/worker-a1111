@@ -99,9 +99,11 @@ RUN echo "Verifying downloads..." && \
 # ---------------------------------------------------------------------------- #
 #                        Stage 2: Build the final image                        #
 # ---------------------------------------------------------------------------- #
-FROM python:3.10.14-slim AS build_final_image
+# FIXED: Using RunPod's PyTorch image with CUDA support instead of python:slim
+FROM runpod/pytorch:2.4.0-py3.11-cuda12.4.1-devel-ubuntu22.04 AS build_final_image
 
-ARG A1111_RELEASE=v1.9.3
+# FIXED: Updated to latest stable A1111 release
+ARG A1111_RELEASE=v1.10.1
 
 ENV DEBIAN_FRONTEND=noninteractive \
     PIP_PREFER_BINARY=1 \
@@ -110,25 +112,37 @@ ENV DEBIAN_FRONTEND=noninteractive \
 
 SHELL ["/bin/bash", "-o", "pipefail", "-c"]
 
+# Install system dependencies
 RUN apt-get update && \
-    apt install -y \
+    apt-get install -y \
     fonts-dejavu-core rsync git jq moreutils aria2 wget libgoogle-perftools-dev \
     libtcmalloc-minimal4 procps libgl1 libglib2.0-0 && \
     apt-get autoremove -y && rm -rf /var/lib/apt/lists/* && apt-get clean -y
 
-RUN --mount=type=cache,target=/root/.cache/pip \
-    git clone https://github.com/AUTOMATIC1111/stable-diffusion-webui.git && \
+# FIXED: Clone A1111 and install dependencies in correct order
+# 1. Clone the repo first
+RUN git clone https://github.com/AUTOMATIC1111/stable-diffusion-webui.git && \
     cd stable-diffusion-webui && \
-    git reset --hard ${A1111_RELEASE} && \
-    pip install xformers && \
-    pip install -r requirements_versions.txt && \
+    git reset --hard ${A1111_RELEASE}
+
+# 2. Install xformers (PyTorch is already in the base image)
+RUN --mount=type=cache,target=/root/.cache/pip \
+    pip install xformers
+
+# 3. Install A1111 requirements
+RUN --mount=type=cache,target=/root/.cache/pip \
+    cd /stable-diffusion-webui && \
+    pip install -r requirements_versions.txt
+
+# 4. Run prepare_environment to set up remaining dependencies
+RUN cd /stable-diffusion-webui && \
     python -c "from launch import prepare_environment; prepare_environment()" --skip-torch-cuda-test
 
 # Copy models from download stage
 COPY --from=download /stable-diffusion-webui/models/Lora /stable-diffusion-webui/models/Lora
 COPY --from=download /model.safetensors /model.safetensors
 
-# Install additional dependencies
+# Install additional dependencies (runpod SDK)
 COPY requirements.txt .
 RUN --mount=type=cache,target=/root/.cache/pip \
     pip install --no-cache-dir -r requirements.txt
